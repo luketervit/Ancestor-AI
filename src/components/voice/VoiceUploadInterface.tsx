@@ -1,388 +1,367 @@
 import React, { useState, useRef } from "react";
-import { Mic, Upload, Play, Square, Save } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Mic, Upload, FileAudio, X, Play, Pause, CheckCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion } from "framer-motion";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-interface VoiceUploadInterfaceProps {
-  ancestorProfiles?: Array<{ id: string; name: string }>;
-  onUploadComplete?: (data: { profileId: string; audioUrl: string }) => void;
-  onRecordComplete?: (data: { profileId: string; audioBlob: Blob }) => void;
+interface VoiceUploadProps {
+  onClose: () => void;
+  ancestorProfiles: {
+    id: string;
+    name: string;
+  }[];
+  selectedProfileId?: string | null;
 }
 
-const VoiceUploadInterface = ({
-  ancestorProfiles = [
-    { id: "1", name: "Grandma Sarah" },
-    { id: "2", name: "Grandpa Joe" },
-    { id: "3", name: "Uncle Robert" },
-  ],
-  onUploadComplete = () => {},
-  onRecordComplete = () => {},
-}: VoiceUploadInterfaceProps) => {
-  const [selectedProfile, setSelectedProfile] = useState<string>(
-    ancestorProfiles[0]?.id || "",
-  );
-  const [activeTab, setActiveTab] = useState<string>("upload");
-  const [isRecording, setIsRecording] = useState<boolean>(false);
-  const [recordedAudio, setRecordedAudio] = useState<string | null>(null);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [showConfirmDialog, setShowConfirmDialog] = useState<boolean>(true);
-  const [processingStatus, setProcessingStatus] = useState<string>("");
-
-  const audioRef = useRef<HTMLAudioElement>(null);
+const VoiceUpload = ({ onClose, ancestorProfiles = [], selectedProfileId }: VoiceUploadProps) => {
+  const [recordings, setRecordings] = useState<{ blob: Blob; url: string; name: string }[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedProfile, setSelectedProfile] = useState(selectedProfileId || "");
+  const [isUploading, setIsUploading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState<string | null>(null);
+  const [uploadComplete, setUploadComplete] = useState(false);
+  const [activeTab, setActiveTab] = useState<"record" | "upload">("upload");
+  
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-
-  const handleProfileChange = (value: string) => {
-    setSelectedProfile(value);
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type.includes("audio")) {
-      setUploadedFile(file);
-      // Create a URL for the audio file to preview
-      const audioUrl = URL.createObjectURL(file);
-      setRecordedAudio(audioUrl);
-    }
-  };
+  const timerRef = useRef<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const startRecording = async () => {
-    audioChunksRef.current = [];
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
-
+      audioChunksRef.current = [];
+      
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        audioChunksRef.current.push(event.data);
       };
-
+      
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/wav",
-        });
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordedAudio(audioUrl);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const recordingName = `Recording ${recordings.length + 1} (${timestamp})`;
+        
+        setRecordings([...recordings, { 
+          blob: audioBlob, 
+          url: audioUrl, 
+          name: recordingName 
+        }]);
+        
+        // Stop all tracks in the stream to release the microphone
+        stream.getTracks().forEach(track => track.stop());
       };
-
+      
       mediaRecorder.start();
       setIsRecording(true);
+      setRecordingTime(0);
+      
+      // Start the timer to track recording duration
+      timerRef.current = window.setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
     } catch (error) {
       console.error("Error accessing microphone:", error);
+      alert("Could not access your microphone. Please check your permissions.");
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-
-      // Stop all audio tracks
-      mediaRecorderRef.current.stream
-        .getTracks()
-        .forEach((track) => track.stop());
-    }
-  };
-
-  const playRecording = () => {
-    if (audioRef.current && recordedAudio) {
-      audioRef.current.play();
-    }
-  };
-
-  const saveRecording = () => {
-    if (!selectedProfile || !recordedAudio) return;
-
-    setProcessingStatus("Processing voice sample...");
-
-    // Simulate processing delay
-    setTimeout(() => {
-      if (activeTab === "upload" && uploadedFile) {
-        onUploadComplete({
-          profileId: selectedProfile,
-          audioUrl: recordedAudio,
-        });
-      } else if (activeTab === "record" && audioChunksRef.current.length > 0) {
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/wav",
-        });
-        onRecordComplete({
-          profileId: selectedProfile,
-          audioBlob,
-        });
+      
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
       }
+    }
+  };
 
-      setProcessingStatus("Voice sample saved successfully!");
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    
+    const newRecordings = [...recordings];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const audioUrl = URL.createObjectURL(file);
+      newRecordings.push({
+        blob: file,
+        url: audioUrl,
+        name: file.name
+      });
+    }
+    
+    setRecordings(newRecordings);
+  };
 
-      // Reset after saving
-      setTimeout(() => {
-        setRecordedAudio(null);
-        setUploadedFile(null);
-        setProcessingStatus("");
-      }, 2000);
-    }, 1500);
+  const removeRecording = (index: number) => {
+    const newRecordings = [...recordings];
+    
+    // Revoke the object URL to prevent memory leaks
+    URL.revokeObjectURL(newRecordings[index].url);
+    
+    newRecordings.splice(index, 1);
+    setRecordings(newRecordings);
+  };
+
+  const playRecording = (url: string) => {
+    if (audioRef.current) {
+      if (isPlaying === url) {
+        audioRef.current.pause();
+        setIsPlaying(null);
+      } else {
+        audioRef.current.src = url;
+        audioRef.current.play();
+        setIsPlaying(url);
+        
+        audioRef.current.onended = () => {
+          setIsPlaying(null);
+        };
+      }
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleUpload = () => {
+    if (recordings.length === 0) {
+      alert("Please record or upload at least one audio file");
+      return;
+    }
+    
+    if (!selectedProfile) {
+      alert("Please select an ancestor profile");
+      return;
+    }
+    
+    setIsUploading(true);
+    
+    // Simulate upload progress
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += 5;
+      setUploadProgress(progress);
+      
+      if (progress >= 100) {
+        clearInterval(interval);
+        setIsUploading(false);
+        setUploadComplete(true);
+      }
+    }, 200);
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-md">
-      <div className="mb-8 text-center">
-        <h2 className="text-3xl font-bold text-gray-800 mb-2">
-          Voice Sample Collection
-        </h2>
-        <p className="text-gray-600">
-          Upload or record voice samples to help preserve the unique voice
-          patterns of your loved ones.
-        </p>
-      </div>
-
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Select Ancestor Profile
-        </label>
-        <Select value={selectedProfile} onValueChange={handleProfileChange}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select a profile" />
-          </SelectTrigger>
-          <SelectContent>
-            {ancestorProfiles.map((profile) => (
-              <SelectItem key={profile.id} value={profile.id}>
-                {profile.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <Tabs
-        defaultValue="upload"
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="w-full"
-      >
-        <TabsList className="grid w-full grid-cols-2 mb-8">
-          <TabsTrigger value="upload" className="text-center">
-            <Upload className="mr-2 h-4 w-4" />
-            Upload Audio
-          </TabsTrigger>
-          <TabsTrigger value="record" className="text-center">
-            <Mic className="mr-2 h-4 w-4" />
-            Record Voice
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="upload" className="space-y-4">
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-            {!uploadedFile ? (
-              <div className="space-y-4">
-                <div className="flex justify-center">
-                  <Upload className="h-12 w-12 text-gray-400" />
-                </div>
-                <div>
-                  <p className="text-gray-600 mb-2">
-                    Drag and drop an audio file or
-                  </p>
-                  <label className="inline-block">
-                    <Input
-                      type="file"
-                      accept="audio/*"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                    />
-                    <Button variant="outline" className="cursor-pointer">
-                      Browse Files
-                    </Button>
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Supported formats: MP3, WAV, M4A (Max size: 10MB)
-                </p>
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md md:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Upload Voice Recordings</DialogTitle>
+          <DialogDescription>
+            Add voice samples to improve the AI model's voice synthesis.
+          </DialogDescription>
+        </DialogHeader>
+        
+        {!uploadComplete ? (
+          <>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="profile">Select Ancestor Profile</Label>
+                <Select value={selectedProfile} onValueChange={setSelectedProfile}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a profile" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ancestorProfiles.map(profile => (
+                      <SelectItem key={profile.id} value={profile.id}>
+                        {profile.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-green-600 font-medium">
-                  File uploaded: {uploadedFile.name}
-                </p>
-                {recordedAudio && (
-                  <div className="flex justify-center space-x-4">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={playRecording}
-                    >
-                      <Play className="h-4 w-4" />
-                    </Button>
-                    <audio
-                      ref={audioRef}
-                      src={recordedAudio}
-                      className="hidden"
-                    />
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setUploadedFile(null);
-                    setRecordedAudio(null);
-                  }}
+              
+              <div className="flex space-x-2 mb-2">
+                <Button 
+                  variant={activeTab === "upload" ? "default" : "outline"}
+                  onClick={() => setActiveTab("upload")} 
+                  className="flex-1"
                 >
-                  Remove File
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Audio
+                </Button>
+                <Button 
+                  variant={activeTab === "record" ? "default" : "outline"}
+                  onClick={() => setActiveTab("record")} 
+                  className="flex-1"
+                >
+                  <Mic className="mr-2 h-4 w-4" />
+                  Record Voice
                 </Button>
               </div>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="record" className="space-y-4">
-          <div className="border-2 border-gray-300 rounded-lg p-8 text-center">
-            <div className="space-y-6">
-              <div className="flex justify-center">
-                <motion.div
-                  animate={isRecording ? { scale: [1, 1.1, 1] } : {}}
-                  transition={{ repeat: Infinity, duration: 1.5 }}
-                  className="relative"
-                >
-                  <div
-                    className={`h-24 w-24 rounded-full flex items-center justify-center ${isRecording ? "bg-red-100" : "bg-gray-100"}`}
-                  >
-                    <Mic
-                      className={`h-12 w-12 ${isRecording ? "text-red-500" : "text-gray-500"}`}
-                    />
-                  </div>
-                  {isRecording && (
-                    <motion.div
-                      className="absolute inset-0 rounded-full bg-red-400 opacity-20"
-                      animate={{ scale: [1, 1.5], opacity: [0.2, 0] }}
-                      transition={{ repeat: Infinity, duration: 1 }}
-                    />
-                  )}
-                </motion.div>
-              </div>
-
-              <div className="space-y-4">
-                {!recordedAudio ? (
-                  <div className="space-y-4">
-                    {!isRecording ? (
-                      <Button onClick={startRecording}>Start Recording</Button>
+              
+              {activeTab === "record" ? (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle>Record Voice Sample</CardTitle>
+                    <CardDescription>
+                      Read a passage or speak naturally for best results
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isRecording ? (
+                      <div className="flex flex-col items-center space-y-4">
+                        <motion.div
+                          animate={{ scale: [1, 1.1, 1] }}
+                          transition={{ repeat: Infinity, duration: 1.5 }}
+                          className="relative"
+                        >
+                          <div className="w-full bg-red-100 p-4 rounded-md flex items-center justify-between">
+                            <Mic className="h-6 w-6 text-red-500 animate-pulse" />
+                            <span className="text-red-500 font-medium">Recording... {formatTime(recordingTime)}</span>
+                          </div>
+                          <motion.div
+                            className="absolute inset-0 rounded-md bg-red-400 opacity-20"
+                            animate={{ scale: [1, 1.03], opacity: [0.2, 0] }}
+                            transition={{ repeat: Infinity, duration: 1 }}
+                          />
+                        </motion.div>
+                        <Button onClick={stopRecording} variant="destructive">
+                          Stop Recording
+                        </Button>
+                      </div>
                     ) : (
-                      <Button variant="destructive" onClick={stopRecording}>
-                        <Square className="mr-2 h-4 w-4" />
-                        Stop Recording
+                      <Button onClick={startRecording} className="w-full" size="lg">
+                        <Mic className="mr-2 h-5 w-5" />
+                        Start Recording
                       </Button>
                     )}
-                    <p className="text-sm text-gray-500">
-                      Speak clearly and naturally. Try to record at least 30
-                      seconds of speech.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <p className="text-green-600 font-medium">
-                      Recording complete!
-                    </p>
-                    <div className="flex justify-center space-x-4">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={playRecording}
-                      >
-                        <Play className="h-4 w-4" />
-                      </Button>
-                      <audio
-                        ref={audioRef}
-                        src={recordedAudio}
-                        className="hidden"
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setRecordedAudio(null);
-                        audioChunksRef.current = [];
-                      }}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="upload">Upload audio files</Label>
+                  <div className="flex items-center space-x-2">
+                    <Input 
+                      id="upload" 
+                      type="file" 
+                      accept="audio/*" 
+                      onChange={handleFileUpload} 
+                      multiple 
+                      className="flex-1"
+                    />
+                    <Label 
+                      htmlFor="upload" 
+                      className="cursor-pointer bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2 rounded-md flex items-center"
                     >
-                      Discard & Record Again
-                    </Button>
+                      <Upload className="h-4 w-4 mr-1" />
+                      Browse
+                    </Label>
                   </div>
-                )}
-              </div>
+                  <p className="text-xs text-muted-foreground">
+                    Supported formats: MP3, WAV, M4A (max 10MB per file)
+                  </p>
+                </div>
+              )}
+              
+              {recordings.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle>Your Recordings</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {recordings.map((recording, index) => (
+                        <div 
+                          key={index} 
+                          className="flex items-center justify-between bg-muted p-3 rounded-md"
+                        >
+                          <div className="flex items-center space-x-2 flex-1 min-w-0">
+                            <FileAudio className="h-5 w-5 flex-shrink-0" />
+                            <span className="text-sm truncate">{recording.name}</span>
+                          </div>
+                          <div className="flex items-center space-x-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => playRecording(recording.url)}
+                            >
+                              {isPlaying === recording.url ? 
+                                <Pause className="h-4 w-4" /> : 
+                                <Play className="h-4 w-4" />
+                              }
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={() => removeRecording(index)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              
+              {isUploading && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Uploading recordings...</Label>
+                    <span className="text-xs font-medium">{uploadProgress}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="w-full" />
+                </div>
+              )}
             </div>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      {(uploadedFile || recordedAudio) && !isRecording && (
-        <div className="mt-6 flex justify-center">
-          <Button onClick={saveRecording} className="flex items-center">
-            <Save className="mr-2 h-4 w-4" />
-            Save Voice Sample
-          </Button>
-        </div>
-      )}
-
-      {processingStatus && (
-        <div className="mt-4 text-center">
-          <p
-            className={`font-medium ${processingStatus.includes("success") ? "text-green-600" : "text-blue-600"}`}
-          >
-            {processingStatus}
-          </p>
-        </div>
-      )}
-
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Voice Sample Collection</DialogTitle>
-            <DialogDescription>
-              Your voice samples help create a more authentic AI representation.
-              The more samples you provide, the more accurate the voice
-              synthesis will be.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <h4 className="font-medium">Tips for best results:</h4>
-              <ul className="list-disc pl-5 text-sm text-gray-600 space-y-1">
-                <li>
-                  Record in a quiet environment with minimal background noise
-                </li>
-                <li>Speak naturally as you would in everyday conversation</li>
-                <li>
-                  Try to provide at least 5 minutes of total voice samples
-                </li>
-                <li>
-                  Include a variety of emotional tones and speech patterns
-                </li>
-              </ul>
+            
+            <DialogFooter className="flex space-x-2 justify-end">
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpload} disabled={isUploading || recordings.length === 0 || !selectedProfile}>
+                {isUploading ? "Uploading..." : "Upload Recordings"}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <div className="py-6 flex flex-col items-center text-center space-y-4">
+            <div className="rounded-full bg-green-100 p-3">
+              <CheckCircle className="h-8 w-8 text-green-600" />
             </div>
+            <h3 className="text-xl font-medium">Upload Complete!</h3>
+            <p className="text-muted-foreground">
+              {recordings.length} recording{recordings.length !== 1 ? 's' : ''} successfully uploaded.
+              The AI model will now process these recordings to improve voice synthesis.
+            </p>
+            <Button onClick={onClose}>
+              Close
+            </Button>
           </div>
-          <DialogFooter>
-            <Button onClick={() => setShowConfirmDialog(false)}>Got it</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        )}
+        
+        {/* Hidden audio element for playback */}
+        <audio ref={audioRef} className="hidden" />
+      </DialogContent>
+    </Dialog>
   );
 };
 
-export default VoiceUploadInterface;
+export default VoiceUpload;

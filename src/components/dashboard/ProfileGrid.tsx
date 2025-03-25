@@ -18,10 +18,15 @@ const ProfileCard = ({
   imageUrl = "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
   onSelect = () => {},
 }: ProfileCardProps) => {
+  const handleClick = () => {
+    console.log(`Profile selected: ${id}`);
+    onSelect(id);
+  };
+
   return (
     <Card
       className="overflow-hidden cursor-pointer transition-all hover:shadow-md bg-white"
-      onClick={() => onSelect(id)}
+      onClick={handleClick}
     >
       <div className="aspect-square overflow-hidden bg-gray-100">
         <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
@@ -35,13 +40,18 @@ const ProfileCard = ({
 };
 
 const NewProfileCard = ({ onClick = () => {} }) => {
+  const handleClick = () => {
+    console.log("Create new profile clicked");
+    if (onClick) onClick();
+  };
+
   return (
     <Card
-      className="overflow-hidden cursor-pointer transition-all hover:shadow-md border-dashed border-2 flex flex-col items-center justify-center aspect-square bg-white"
-      onClick={onClick}
+      className="overflow-hidden cursor-pointer transition-all hover:shadow-md hover:border-primary hover:scale-105 border-dashed border-2 flex flex-col items-center justify-center aspect-square bg-white"
+      onClick={handleClick}
     >
       <CardContent className="flex flex-col items-center justify-center h-full p-4 text-center">
-        <PlusCircle className="h-12 w-12 text-muted-foreground mb-2" />
+        <PlusCircle className="h-12 w-12 text-muted-foreground mb-2 group-hover:text-primary" />
         <h3 className="font-medium text-lg">Create New Profile</h3>
         <p className="text-muted-foreground text-sm">
           Add a loved one to preserve their memory
@@ -52,7 +62,12 @@ const NewProfileCard = ({ onClick = () => {} }) => {
 };
 
 interface ProfileGridProps {
-  profiles?: ProfileCardProps[];
+  profiles?: {
+    id: string;
+    name: string;
+    relationship: string;
+    imageUrl: string;
+  }[];
   onSelectProfile?: (id: string) => void;
   onCreateProfile?: () => void;
 }
@@ -64,21 +79,18 @@ const ProfileGrid = ({
       name: "Sarah Johnson",
       relationship: "Grandmother",
       imageUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
-      onSelect: () => {},
     },
     {
       id: "profile-2",
       name: "Robert Smith",
       relationship: "Grandfather",
       imageUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Robert",
-      onSelect: () => {},
     },
     {
       id: "profile-3",
       name: "James Wilson",
       relationship: "Uncle",
       imageUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=James",
-      onSelect: () => {},
     },
   ],
   onSelectProfile = (id: string) => console.log(`Selected profile: ${id}`),

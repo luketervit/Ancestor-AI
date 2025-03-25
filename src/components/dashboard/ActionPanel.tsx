@@ -1,6 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MessageSquare, Upload, Settings, Play } from "lucide-react";
+import { Mic, MessageSquare, Play, Settings } from "lucide-react";
 
 interface ActionPanelProps {
   onVoiceUpload?: () => void;
@@ -76,12 +76,17 @@ const ActionButton = ({
   onClick,
   variant = "default",
 }: ActionButtonProps) => {
+  const handleClick = () => {
+    console.log(`Button clicked: ${label}`);
+    if (onClick) onClick();
+  };
+
   return (
     <div className="flex flex-col h-full">
       <Button
         variant={variant}
-        onClick={onClick}
-        className="w-full justify-start p-4 h-auto mb-2 text-left"
+        onClick={handleClick}
+        className="w-full justify-start p-4 h-auto mb-2 text-left hover:scale-105 transition-all focus:ring-2 focus:ring-primary"
       >
         <div className="flex items-center">
           {icon}

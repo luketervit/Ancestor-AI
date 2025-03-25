@@ -58,6 +58,8 @@ const ProfileCreationForm = ({
   onComplete = () => {},
   isOpen = true,
 }: ProfileCreationFormProps) => {
+  if (!isOpen) return null;
+
   const [step, setStep] = useState(1);
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([]);
@@ -123,8 +125,6 @@ const ProfileCreationForm = ({
     console.log("Photos:", photos);
     onComplete(data);
   };
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">

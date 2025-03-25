@@ -15,6 +15,12 @@ import { Bell, User, Heart, Clock, BarChart } from "lucide-react";
 interface DashboardProps {
   userName?: string;
   profileCount?: number;
+  ancestorProfiles?: {
+    id: string;
+    name: string;
+    relationship: string;
+    imageUrl: string;
+  }[];
   onVoiceUpload?: () => void;
   onTextUpload?: () => void;
   onStartConversation?: () => void;
@@ -26,6 +32,7 @@ interface DashboardProps {
 const Dashboard = ({
   userName = "Sarah",
   profileCount = 3,
+  ancestorProfiles = [],
   onVoiceUpload = () => console.log("Voice upload clicked"),
   onTextUpload = () => console.log("Text upload clicked"),
   onStartConversation = () => console.log("Start conversation clicked"),
@@ -111,14 +118,43 @@ const Dashboard = ({
 
           {/* Action Panel */}
           <ActionPanel
-            onVoiceUpload={onVoiceUpload}
-            onTextUpload={onTextUpload}
-            onStartConversation={onStartConversation}
-            onManageSettings={onManageSettings}
+            onVoiceUpload={() => {
+              console.log("Voice upload clicked from Dashboard");
+              if (ancestorProfiles.length === 0) {
+                alert("Please create an ancestor profile first");
+                onCreateProfile();
+              } else {
+                onVoiceUpload();
+              }
+            }}
+            onTextUpload={() => {
+              console.log("Text upload clicked from Dashboard");
+              if (ancestorProfiles.length === 0) {
+                alert("Please create an ancestor profile first");
+                onCreateProfile();
+              } else {
+                onTextUpload();
+              }
+            }}
+            onStartConversation={() => {
+              console.log("Start conversation clicked from Dashboard");
+              if (ancestorProfiles.length === 0) {
+                alert("Please create an ancestor profile first");
+                onCreateProfile();
+              } else {
+                onStartConversation();
+              }
+            }}
+            onManageSettings={() => {
+              console.log("Settings clicked from Dashboard");
+              // Directly call the settings handler
+              onManageSettings();
+            }}
           />
 
           {/* Profile Grid */}
           <ProfileGrid
+            profiles={ancestorProfiles}
             onSelectProfile={onSelectProfile}
             onCreateProfile={onCreateProfile}
           />
